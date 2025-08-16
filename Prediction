@@ -1,0 +1,131 @@
+# smart_number_visualizer_kivy.py
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from collections import Counter
+import matplotlib.pyplot as plt
+import json
+import os
+
+HISTORY_FILE = "results_history.json"
+
+class NumberVisualizer(BoxLayout):
+    def __init__(self, **kwargs):
+        super().__init__(orientation="vertical", **kwargs)
+
+        self.add_widget(Label(text="Enter past results (0-9) separated by commas:"))
+        self.entry = TextInput(multiline=False)
+        self.add_widget(self.entry)
+
+        analyze_btn = Button(text="Analyze")
+        analyze_btn.bind(on_press=self.analyze)
+        self.add_widget(analyze_btn)
+
+        budget_btn = Button(text="Set Budget / Stop-Loss")
+        budget_btn.bind(on_press=self.set_budget)
+        self.add_widget(budget_btn)
+
+        self.output_label = Label(text="", markup=True)
+        self.add_widget(self.output_label)
+
+        self.budget = 0
+        self.stop_loss = 0
+
+        # Load history
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r") as f:
+                self.history = json.load(f)
+        else:
+            self.history = []
+
+    def set_budget(self, instance):
+        self.output_label.text = "Enter budget and stop-loss in format: budget,stop_loss"
+        self.entry.text = ""
+
+    def analyze(self, instance):
+        raw = self.entry.text
+        if ',' in raw and 'Set Budget' in self.output_label.text:
+            try:
+                parts = [int(x.strip()) for x in raw.split(",")]
+                self.budget, self.stop_loss = parts[0], parts[1]
+                self.output_label.text = f"Budget set: {self.budget}, Stop-loss set: {self.stop_loss}"
+                return
+            except:
+                self.output_label.text = "Invalid format for budget/stop-loss."
+                return
+
+        try:
+            results = [int(x.strip()) for x in raw.split(",")]
+            if any(n < 0 or n > 9 for n in results):
+                self.output_label.text = "Enter numbers between 0-9 only."
+                return
+        except:
+            self.output_label.text = "Invalid input format."
+            return
+
+        # Save to history
+        self.history.append(results)
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(self.history, f)
+
+        # Frequency and hot/cold numbers
+        frequency = Counter(results)
+        most_common = frequency.most_common(3)
+        least_common = frequency.most_common()[:-4:-1]
+        hot_numbers = [num for num, freq in most_common]
+        cold_numbers = [num for num, freq in least_common]
+
+        # Tail pattern
+        tail_length = 10 if len(results) >= 10 else len(results)
+        recent_tail = results[-tail_length:]
+
+        # Suggested numbers
+        suggested = [num for num in hot_numbers if num not in recent_tail]
+
+        # Probability estimate
+        total = sum(frequency.values())
+        prob_estimate = {num: round((freq/total)*100,2) for num, freq in frequency.items()}
+
+        # Output text
+        output_text = f"Number Frequency:\n"
+        for number in range(10):
+            freq = frequency.get(number,0)
+            mark = ""
+            if number in hot_numbers:
+                mark = " 🔥"
+            elif number in cold_numbers:
+                mark = " ❄️"
+            output_text += f"{number}: {freq}{mark}, Probability: {prob_estimate.get(number,0)}%\n"
+
+        output_text += f"\nRecent Tail Pattern (last {tail_length} numbers): {recent_tail}\n"
+        output_text += f"Suggested Next Likely Numbers: {suggested if suggested else 'No strong guess'}\n"
+        if self.budget and self.stop_loss:
+            output_text += f"Budget: {self.budget}, Stop-Loss: {self.stop_loss}\n"
+
+        self.output_label.text = output_text
+
+        # Visualize charts (last 20 results)
+        last_results = [item for sublist in self.history[-20:] for item in sublist]
+        plt.figure(figsize=(12,4))
+        plt.subplot(1,2,1)
+        plt.bar(frequency.keys(), frequency.values(), color='skyblue')
+        plt.xlabel("Numbers (0-9)")
+        plt.ylabel("Frequency")
+        plt.title("Number Frequency")
+        plt.subplot(1,2,2)
+        plt.plot(range(1,len(last_results)+1), last_results, marker='o', color='orange')
+        plt.xlabel("Last 20 Results Timeline")
+        plt.ylabel("Numbers")
+        plt.title("Trend of Last Results")
+        plt.tight_layout()
+        plt.show()
+
+
+class NumberVisualizerApp(App):
+    def build(self):
+        return NumberVisualizer()
+
+if __name__ == "__main__":
+    NumberVisualizerApp().run()
