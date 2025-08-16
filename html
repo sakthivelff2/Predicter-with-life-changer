@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Final WINGO Prediction Tool</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
+h1 { text-align: center; color: #333; }
+textarea { width: 100%; height: 120px; padding: 10px; margin-bottom: 10px; font-size: 16px; }
+button { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; margin-bottom:10px; }
+button:hover { background: #45a049; }
+.result { margin-top: 20px; padding: 15px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+.highlight { font-weight: bold; color: #d9534f; }
+.hot { color: #e74c3c; font-weight: bold; }
+.cold { color: #3498db; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>🎯 Final WINGO Prediction Tool</h1>
+<p>Paste past WINGO numbers (space-separated):</p>
+<textarea id="numbers" placeholder="Ex: 5 12 8 20 15 3 7 10"></textarea>
+<br>
+<button onclick="saveHistory()">Save Numbers</button>
+<button onclick="predictWingo()">Predict Next Numbers</button>
+<button onclick="clearHistory()">Clear History</button>
+
+<div class="result" id="output"></div>
+<div class="result" id="historyOutput"></div>
+
+<script>
+// Load history from localStorage
+let history = JSON.parse(localStorage.getItem('wingoHistory') || "[]");
+updateHistoryDisplay();
+
+function saveHistory() {
+    const input = document.getElementById("numbers").value.trim();
+    if(!input) { alert("Enter numbers first!"); return; }
+    let nums = input.split(/\s+/).map(Number);
+    if(nums.some(isNaN)) { alert("Only numbers allowed!"); return; }
+
+    history = history.concat(nums);
+    if(history.length > 20) history = history.slice(-20); // Keep last 20
+    localStorage.setItem('wingoHistory', JSON.stringify(history));
+    updateHistoryDisplay();
+    alert("Numbers saved!");
+}
+
+function clearHistory() {
+    history = [];
+    localStorage.removeItem('wingoHistory');
+    updateHistoryDisplay();
+    document.getElementById("output").innerHTML = "";
+}
+
+function updateHistoryDisplay() {
+    document.getElementById("historyOutput").innerHTML = "<b>Last Draw History:</b> " + (history.length ? history.join(", ") : "No history");
+}
+
+function predictWingo() {
+    if(history.length < 5) { alert("Enter at least 5 numbers!"); return; }
+
+    // Frequency count
+    const freq = {};
+    history.forEach(n => freq[n] = (freq[n] || 0) + 1);
+
+    let sortedByFreq = Object.keys(freq).sort((a,b)=>freq[b]-freq[a]);
+    let hotNumbers = sortedByFreq.slice(0, 3);
+    let coldNumbers = sortedByFreq.slice(-3);
+
+    let last5 = history.slice(-5);
+    let avgLast5 = Math.round(last5.reduce((a,b)=>a+b,0)/5);
+
+    // Predict next 5 numbers around average ± variation
+    let predictedNumbers = [
+        avgLast5, avgLast5 + 1, avgLast5 - 1,
+        avgLast5 + 2, avgLast5 - 2
+    ].map(n => n > 0 ? n : 1);
+
+    document.getElementById("output").innerHTML = `
+        <b>Hot Numbers:</b> <span class="hot">${hotNumbers.join(", ")}</span><br/>
+        <b>Cold Numbers:</b> <span class="cold">${coldNumbers.join(", ")}</span><br/>
+        <b>Last 5 Numbers:</b> ${last5.join(", ")}<br/>
+        <b>Predicted Next 5 Numbers:</b> 🎯 ${predictedNumbers.join(", ")}
+    `;
+}
+</script>
+
+</body>
+</html>
